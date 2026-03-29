@@ -83,6 +83,8 @@ body{font-family:'DM Sans',sans-serif;background:var(--slate);color:var(--text);
 .btn.gold:hover{background:rgba(201,168,76,0.2)}
 .btn.teal{background:var(--teal-bg);border-color:var(--teal);color:var(--teal)}
 .btn.teal:hover{background:rgba(29,158,117,0.2)}
+.btn.red-btn{background:rgba(226,75,74,0.08);border-color:rgba(226,75,74,0.4);color:#F09595}
+.btn.red-btn:hover{background:rgba(226,75,74,0.18)}
 .btn-sm{padding:4px 10px;font-size:10px}
 .form-group{margin-bottom:14px}
 .form-label{font-size:10px;font-weight:600;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:block;margin-bottom:6px}
@@ -243,22 +245,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--slate);color:var(--text);
 
 <!-- DASHBOARD -->
 <div class="page active" id="page-dashboard">
-  <div class="section-label">Overview — March 2026</div>
-  <div class="metrics-row">
-    <div class="metric-card gold"><div class="metric-label">Active Clients</div><div class="metric-val">0</div><div class="metric-delta" style="color:var(--muted)">No data yet</div></div>
-    <div class="metric-card teal"><div class="metric-label">Approvals</div><div class="metric-val">0</div><div class="metric-delta" style="color:var(--muted)">No data yet</div></div>
-    <div class="metric-card amber"><div class="metric-label">Avg Credit Δ</div><div class="metric-val">—</div><div class="metric-sub">pts since intake</div></div>
-    <div class="metric-card red"><div class="metric-label">Disputes Sent</div><div class="metric-val">0</div><div class="metric-delta" style="color:var(--muted)">No data yet</div></div>
-    <div class="metric-card blue"><div class="metric-label">Monthly Revenue</div><div class="metric-val">$0</div><div class="metric-delta" style="color:var(--muted)">No data yet</div></div>
-  </div>
+  <div class="section-label" id="dashDateLabel">Overview</div>
+  <div class="metrics-row" id="dashMetricsRow"></div>
   <div class="section-label">Pipeline by Stage</div>
-  <div class="pipeline-stages">
-    <div class="stage-col"><div class="stage-name">Inquiry</div><div class="stage-count">0</div><div class="stage-line" style="background:var(--blue)"></div></div>
-    <div class="stage-col"><div class="stage-name">Intake</div><div class="stage-count">0</div><div class="stage-line" style="background:var(--amber)"></div></div>
-    <div class="stage-col"><div class="stage-name">Credit Work</div><div class="stage-count">0</div><div class="stage-line" style="background:var(--teal)"></div></div>
-    <div class="stage-col"><div class="stage-name">Rental App</div><div class="stage-count">0</div><div class="stage-line" style="background:var(--gold)"></div></div>
-    <div class="stage-col"><div class="stage-name">Closed</div><div class="stage-count">0</div><div class="stage-line" style="background:#5DCAA5"></div></div>
-  </div>
+  <div class="pipeline-stages" id="dashPipelineRow"></div>
   <div class="two-col">
     <div class="panel">
       <div class="panel-header"><span class="panel-title">Client Pipeline</span><button class="btn btn-sm gold" onclick="openAddClient()">+ Add Client</button></div>
@@ -530,7 +520,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--slate);color:var(--text);
     <span class="partners-count" id="partnerCount">0 partners</span>
   </div>
 
-  <div id="partnerGridWrapper" class="partner-grid" id="partnerGrid"></div>
+  <div id="partnerGridWrapper" class="partner-grid"></div>
 </div>
 
 </div>
@@ -753,8 +743,33 @@ function clientRow(c,actions=false){
     +'</tr>';
 }
 function renderDashboard(data){
-  document.getElementById('dashClientBody').innerHTML=data.length?data.map(c=>clientRow(c)).join(''):'<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--muted);font-size:12px">No clients found</td></tr>';
-  document.getElementById('activityFeed').innerHTML=ACTIVITIES.map(a=>'<div class="activity-item"><div class="activity-dot '+a.dot+'"></div><div><div class="activity-title">'+a.title+'</div><div class="activity-meta">'+a.meta+'</div></div></div>').join('');
+  // Dynamic metrics
+  const total = clients.length;
+  const active = clients.filter(c=>c.status==='active').length;
+  const approved = clients.filter(c=>c.status==='approved').length;
+  const pending = clients.filter(c=>c.status==='review').length;
+  const scores = clients.filter(c=>c.score>0).map(c=>c.score);
+  const avgScore = scores.length ? Math.round(scores.reduce((a,b)=>a+b,0)/scores.length) : 0;
+  const revenue = clients.reduce((sum,c)=>sum+(c.fee||0),0);
+  const now = new Date();
+  document.getElementById('dashDateLabel').textContent = 'Overview — ' + now.toLocaleString('en-US',{month:'long',year:'numeric'});
+  document.getElementById('dashMetricsRow').innerHTML =
+    '<div class="metric-card gold"><div class="metric-label">Total Clients</div><div class="metric-val">'+total+'</div><div class="metric-delta '+(total>0?'up':'') +'">'+(total>0?'In pipeline':'Add your first client')+'</div></div>'
+   +'<div class="metric-card teal"><div class="metric-label">Active</div><div class="metric-val">'+active+'</div><div class="metric-sub">Working cases</div></div>'
+   +'<div class="metric-card amber"><div class="metric-label">Avg Score</div><div class="metric-val">'+(avgScore||'—')+'</div><div class="metric-sub">Across all clients</div></div>'
+   +'<div class="metric-card red"><div class="metric-label">Pending Review</div><div class="metric-val">'+pending+'</div><div class="metric-sub">Needs attention</div></div>'
+   +'<div class="metric-card blue"><div class="metric-label">Monthly Fees</div><div class="metric-val">$'+revenue.toLocaleString()+'</div><div class="metric-sub">Total retainers</div></div>';
+
+  // Dynamic pipeline stages
+  const stages=[{name:'Inquiry',color:'var(--blue)'},{name:'Intake',color:'var(--amber)'},{name:'Credit Work',color:'var(--teal)'},{name:'Rental App',color:'var(--gold)'},{name:'Closed',color:'#5DCAA5'}];
+  document.getElementById('dashPipelineRow').innerHTML = stages.map((s,i)=>{
+    const count = clients.filter(c=>c.stage===s.name).length;
+    const cls = i===0?'border-radius:6px 0 0 6px':i===4?'border-right:1px solid var(--border);border-radius:0 6px 6px 0':'';
+    return '<div class="stage-col" style="'+cls+'"><div class="stage-name">'+s.name+'</div><div class="stage-count">'+count+'</div><div class="stage-line" style="background:'+s.color+'"></div></div>';
+  }).join('');
+
+  document.getElementById('dashClientBody').innerHTML=data.length?data.map(c=>clientRow(c)).join(''):'<tr><td colspan="6" style="text-align:center;padding:32px;color:var(--muted);font-size:12px">No clients yet. <button class=\'btn btn-sm gold\' style=\'margin-left:8px\' onclick=\'openAddClient()\'>+ Add First Client</button></td></tr>';
+  document.getElementById('activityFeed').innerHTML=ACTIVITIES.length?ACTIVITIES.map(a=>'<div class="activity-item"><div class="activity-dot '+a.dot+'"></div><div><div class="activity-title">'+a.title+'</div><div class="activity-meta">'+a.meta+'</div></div></div>').join(''):'<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px">No recent activity.</div>';
 }
 function renderClientsTable(data){
   document.getElementById('clientsTableBody').innerHTML=data.length?data.map(c=>clientRow(c,true)).join(''):'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--muted);font-size:12px">No clients found</td></tr>';
@@ -1098,6 +1113,7 @@ function renderPartners(){
   // Populate city filter
   const cities=[...new Set(partners.map(p=>p.city).filter(Boolean))].sort();
   const cf_el=document.getElementById('partnerCityFilter');
+  if(!cf_el)return;
   const curCity=cf_el.value;
   cf_el.innerHTML='<option value="">All Cities</option>'+cities.map(c=>'<option value="'+c+'"'+(c===curCity?' selected':'')+'>'+c+'</option>').join('');
 
@@ -1357,7 +1373,7 @@ function guessType(cat){
 
 // Init
 buildMetroTags();addAccountRow();populateDisputeSelect();renderDashboard(clients);
-document.querySelectorAll('.nav-tab').forEach(t=>{t.addEventListener('click',()=>{document.querySelectorAll('.nav-tab').forEach(x=>x.classList.remove('active'));t.classList.add('active');});});
+// nav tabs use onclick handlers directly
 </script>
 </body>
 </html>
